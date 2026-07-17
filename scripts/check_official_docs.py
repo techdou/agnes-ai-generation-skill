@@ -2,9 +2,11 @@
 """Check Agnes AI local rules against the official /v1/models endpoint.
 
 Agnes AI does not currently expose a public llms.txt index, so this checker
-uses the OpenAI-compatible /v1/models endpoint as the authoritative source.
-It also fetches the public doc pages as a secondary signal for model-name
-mentions and warns if the structure changes.
+uses the OpenAI-compatible /v1/models endpoint as the authoritative source,
+and fetches per-model doc pages (slug = model_id without dots) under
+https://agnes-ai.com/doc and https://agnes-ai.com/zh-Hans/docs as a
+secondary signal: each known model should have a live doc page that
+mentions its own model ID.
 
 Exit codes: 0=no issues, 1=WARNING/CRITICAL, 2=couldn't complete.
 """
@@ -24,6 +26,8 @@ from typing import Any, Dict, List, Optional, Tuple
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_KNOWN_RULES = SKILL_ROOT / "templates" / "known_rules.json"
 DEFAULT_BASE_URL = "https://apihub.agnes-ai.com"
+DEFAULT_DOC_BASE_EN = "https://agnes-ai.com/doc"
+DEFAULT_DOC_BASE_ZH = "https://agnes-ai.com/zh-Hans/docs"
 
 CRITICAL = "CRITICAL"
 WARNING = "WARNING"
@@ -90,13 +94,6 @@ class DocCache:
         self._path(url).write_text(content, encoding="utf-8")
 
 
-def _extract_doc_model_names(html: str) -> List[str]:
-    """Best-effort extraction of Agnes model names from doc HTML."""
-    import re
-    # Agnes model IDs follow the pattern agnes-MAJOR.MINOR-flash or agnes-video-vX.Y
-    return sorted(set(re.findall(r"agnes-[a-z0-9]+(?:-[a-z0-9.]+)+", html)))
-
-
 def check_models(known_rules: Dict[str, Any], api_key: str, base_url: str) -> Tuple[List[Dict[str, str]], List[str]]:
     issues: List[Dict[str, str]] = []
     url = base_url.rstrip("/") + "/v1/models"
@@ -135,33 +132,77 @@ def check_models(known_rules: Dict[str, Any], api_key: str, base_url: str) -> Tu
     return issues, remote_ids
 
 
-def check_docs(known_rules: Dict[str, Any], cache: DocCache, force_refresh: bool) -> List[Dict[str, str]]:
+def _model_doc_slug(model_id: str) -> str:
+    """Agnes per-model doc URLs drop dots from the model ID.
+
+    Examples:
+      agnes-2.0-flash        -> agnes-20-flash
+      agnes-image-2.1-flash  -> agnes-image-21-flash
+      agnes-video-v2.0       -> agnes-video-v20
+    """
+    return model_id.replace(".", "")
+
+
+def _check_model_doc_page(
+    model_id: str,
+    lang: str,
+    base_url: str,
+    cache: DocCache,
+    force_refresh: bool,
+) -> Optional[Dict[str, str]]:
+    """Fetch one per-model doc page; return an issue dict if something is off."""
+    slug = _model_doc_slug(model_id)
+    url = f"{base_url.rstrip('/')}/{slug}"
+    text = cache.get(url, 24.0) if not force_refresh else None
+    if text is None:
+        try:
+            text = fetch_text(url)
+            cache.set(url, text)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return {
+                    "severity": WARNING,
+                    "section": "docs",
+                    "message": f"Model '{model_id}' doc page not found ({lang}): {url}",
+                }
+            return {
+                "severity": WARNING,
+                "section": "docs",
+                "message": f"Could not fetch doc page for '{model_id}' ({lang}): HTTP {exc.code}",
+            }
+        except Exception as exc:
+            return {
+                "severity": WARNING,
+                "section": "docs",
+                "message": f"Could not fetch doc page for '{model_id}' ({lang}): {exc}",
+            }
+    # A live model page should mention its own model ID somewhere.
+    if model_id not in text:
+        return {
+            "severity": INFO,
+            "section": "docs",
+            "message": f"Doc page for '{model_id}' ({lang}) loaded but does not contain the model ID; structure may have changed.",
+        }
+    return None
+
+
+def check_docs(
+    known_rules: Dict[str, Any],
+    cache: DocCache,
+    force_refresh: bool,
+) -> List[Dict[str, str]]:
+    """Check per-model doc pages for every model in known_rules."""
     issues: List[Dict[str, str]] = []
     urls = known_rules.get("source_urls", {})
-    for name, url in urls.items():
-        if name == "models_api":
-            continue
-        if force_refresh:
-            text = None
-        else:
-            text = cache.get(url, 24.0)
-        if text is None:
-            try:
-                text = fetch_text(url)
-                cache.set(url, text)
-            except Exception as exc:
-                issues.append({"severity": WARNING, "section": "docs", "message": f"Could not fetch {url}: {exc}"})
-                continue
-        # Look for model names in the docs as a secondary signal.
-        found = _extract_doc_model_names(text)
-        local = set(known_rules.get("models", []))
-        missing_in_docs = local - set(found)
-        if missing_in_docs:
-            issues.append({
-                "severity": INFO,
-                "section": "docs",
-                "message": f"Models not found in {name}: {', '.join(sorted(missing_in_docs))}. Doc structure may have changed.",
-            })
+    doc_base_en = urls.get("doc_base_en", DEFAULT_DOC_BASE_EN)
+    doc_base_zh = urls.get("doc_base_zh", DEFAULT_DOC_BASE_ZH)
+
+    for model_id in known_rules.get("models", []):
+        for lang, base in (("en", doc_base_en), ("zh", doc_base_zh)):
+            issue = _check_model_doc_page(model_id, lang, base, cache, force_refresh)
+            if issue:
+                issues.append(issue)
+
     return issues
 
 

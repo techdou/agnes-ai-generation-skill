@@ -1,5 +1,5 @@
 {
-  "_doc": "Local snapshot of Agnes AI official model availability. Used by check_official_docs.py as the diff baseline for the /v1/models endpoint. Update this when official docs change.",
+  "_doc": "Local snapshot of Agnes AI official model availability. Used by check_official_docs.py as the diff baseline. The /v1/models endpoint is authoritative; per-model doc pages under doc_base_* are a secondary signal (slug = model_id without dots). Update this when official docs change.",
   "models": [
     "agnes-2.0-flash",
     "agnes-1.5-flash",
@@ -14,8 +14,9 @@
   },
   "source_urls": {
     "models_api": "https://apihub.agnes-ai.com/v1/models",
-    "docs_en": "https://agnes-ai.com/doc",
-    "docs_zh": "https://agnes-ai.com/zh-Hans/docs"
+    "doc_base_en": "https://agnes-ai.com/doc",
+    "doc_base_zh": "https://agnes-ai.com/zh-Hans/docs"
   },
+  "_slug_rule": "Per-model doc URL = doc_base_<lang> + '/' + model_id.replace('.', ''). e.g. agnes-image-2.1-flash -> agnes-image-21-flash",
   "snapshot_date": "2026-07-15"
 }
