@@ -6,10 +6,6 @@ Agnes AI Generation Skill is a standard Agent Skills package for calling Agnes A
 
 Official platform: [https://platform.agnes-ai.com/](https://platform.agnes-ai.com/)
 
-Latest release: [v0.1.0 - Agnes Generation Skill](https://github.com/Yacey/agnes-ai-generation-skill/releases/tag/v0.1.0)
-
-This release prioritizes the newer Agnes Video V2.0 `video_id` result lookup, returns generated media `urls` by default without downloading files, and documents that Agnes Responses API multi-turn function calling is not suitable for agent automatic tool loops yet. See [Releases](https://github.com/Yacey/agnes-ai-generation-skill/releases) for the full notes.
-
 ## Features
 
 - Text generation with `agnes-2.0-flash`
@@ -28,6 +24,7 @@ This release prioritizes the newer Agnes Video V2.0 `video_id` result lookup, re
 - Polling-based video result retrieval
 - Seed-based reproducibility
 - Automatic English prompt translation for non-English image/video prompts
+- **Self-update guard**: runtime check against `GET /v1/models` to detect model deprecations or new model releases
 
 ## Quick Start
 
@@ -36,22 +33,16 @@ This release prioritizes the newer Agnes Video V2.0 `video_id` result lookup, re
 1. Open [https://platform.agnes-ai.com/](https://platform.agnes-ai.com/).
 2. Register or sign in.
 3. Create an API key from the platform.
-4. Provide the API key to the AI in a trusted current session, or configure it as a local environment variable.
-
-Do not commit API keys to Git, README files, screenshots, or public chat logs.
+4. Set the key as an environment variable (**do not commit it to Git**).
 
 ### 2. Install This Skill
 
-Install into the current agent:
+```bash
+# Install into the current agent
+npx skills add techdou/agnes-ai-generation-skill
 
-```powershell
-npx skills add Yacey/agnes-ai-generation-skill
-```
-
-Install into all supported agents:
-
-```powershell
-npx skills add Yacey/agnes-ai-generation-skill --all
+# Or clone manually into your agent skills directory
+git clone https://github.com/techdou/agnes-ai-generation-skill.git ~/.agents/skills/agnes-ai-generation-skill
 ```
 
 ### 3. Configure the API Key
@@ -114,7 +105,7 @@ Text-to-video:
 python scripts/agnes_api.py video --prompt "A cinematic shot of a cat walking on the beach at sunset" --poll
 ```
 
-Video commands default to `--num-frames 121 --frame-rate 24` to reduce instability from missing core video parameters. The script validates `num_frames` before sending requests: it must satisfy `8n + 1` and be no more than `441`. It also checks frame rate and dimensions.
+Video commands default to `--num-frames 121 --frame-rate 24` and validate that `num_frames` satisfies `8n + 1` and is no more than `441`.
 
 Image-to-video:
 
@@ -134,21 +125,35 @@ Retrieve a video task:
 python scripts/agnes_api.py video-get video_123456
 ```
 
-By default, command output is normalized with common fields such as `content`, `urls`, `translated_prompt`, and `next_steps`, while preserving the provider response under `raw`.
+By default, output is normalized with common fields such as `content`, `urls`, `translated_prompt`, and `next_steps`, while preserving the provider response under `raw`.
 
 By default, return generated image or video `urls` directly. Do not download, save, or inspect media locally unless the user explicitly asks for a local file or visual inspection.
 
-Streaming text output also includes aggregated `content`, event count, completion status, and a short raw prefix so the result is easier to inspect.
+Add `--raw` to print only the original Agnes response.
 
-When the create response includes `video_id`, the script prefers the newer result endpoint: `/agnesapi?video_id=...`. It falls back to the legacy `task_id` endpoint only when `video_id` is absent. For completed video tasks, the script extracts direct mp4 URLs from `video_url`, `url`, or the live-response field `remixed_from_video_id`, then places them in `urls`.
+## Self-Update Guard
 
-Note: Agnes Responses API multi-turn function calling is currently not suitable as the automatic tool-loop model for agents such as Codex or Claude Code. This skill's script uses the chat completions path; tool calling should be treated as request-shape compatibility rather than stable multi-turn tool execution.
-
-Add `--raw` to print only the original Agnes response:
+Agnes does not provide a public `llms.txt` index, so this skill uses the OpenAI-compatible **`GET /v1/models`** endpoint as the authoritative source and fetches public doc pages as a secondary signal.
 
 ```powershell
---raw
+# Standalone check
+python scripts/agnes_api.py check
+
+# Force refresh cache
+python scripts/agnes_api.py check --force-refresh
+
+# JSON output for programmatic use
+python scripts/agnes_api.py check --format json
+
+# Non-blocking pre-flight check on any generation command
+python scripts/agnes_api.py text --prompt "hi" --check-docs
+python scripts/agnes_api.py image --prompt "hello" --check-docs
+python scripts/agnes_api.py video --prompt "test" --check-docs
 ```
+
+`check` reports **CRITICAL** when a local model is no longer in the official `/v1/models` list, and **INFO** when a new model appears on the server. By default it is non-blocking.
+
+## Smoke Tests
 
 Light smoke test. By default, this checks text, streaming text, tool-calling request shape, and text-to-image only. It does not create video tasks:
 
@@ -184,31 +189,30 @@ To disable automatic translation:
 python scripts/agnes_api.py video --prompt "non-English prompt" --no-translate-prompt
 ```
 
-## Validation Status
+## Repository Structure
 
-Confirmed by live API:
+```text
+.
+├── SKILL.md
+├── README.md
+├── README_EN.md
+├── LICENSE
+├── .gitignore
+├── agents/
+│   └── openai.yaml
+├── references/
+│   └── api.md
+├── scripts/
+│   ├── agnes_api.py
+│   └── check_official_docs.py
+└── templates/
+    └── known_rules.json
+```
 
-- Basic text
-- Streaming text
-- Tool-calling request shape
-- Text-to-image
-- Image-to-image
-- High-information-density text-to-image
-- Non-English prompt auto-translation for text-to-image
-- Non-English prompt auto-translation for text-to-video task creation
-- Completed text-to-video retrieval with a direct mp4 URL
-- Completed image-to-video retrieval with a direct mp4 URL
+## Security
 
-Supported but not fully re-tested end-to-end in the latest pass:
-
-- Multi-image video
-- Keyframe video
-
-Not fully confirmed end-to-end yet:
-
-- Completed URL retrieval for every multi-image video and keyframe animation task
-
-A previous live text-to-video retrieval returned a provider-side `division by zero` error; a later short text-to-video task completed successfully and returned an mp4 URL. Keep provider errors visible when retrying video modes.
+- Do not commit API keys to Git, README files, screenshots, or public chat logs.
+- `.gitignore` already excludes `.env`, `.env.*`, key files, credentials, and the `output/` generation directory.
 
 ## License
 

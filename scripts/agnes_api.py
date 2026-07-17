@@ -9,10 +9,15 @@ import os
 import re
 import sys
 import time
-import urllib.parse
 import urllib.error
+import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any
+
+# Self-update guard: import the checker module in the same package.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import check_official_docs as _cod  # noqa: E402
 
 
 BASE_URL = "https://apihub.agnes-ai.com"
@@ -20,6 +25,21 @@ TEXT_MODEL = "agnes-2.0-flash"
 IMAGE_MODEL = "agnes-image-2.1-flash"
 VIDEO_MODEL = "agnes-video-v2.0"
 SIZE_RE = re.compile(r"^[1-9]\d*x[1-9]\d*$")
+
+
+def _check_docs_if_requested(args: argparse.Namespace) -> None:
+    """Non-blocking advisory check. Called when a command includes --check-docs."""
+    if not getattr(args, "check_docs", False):
+        return
+    issues = _cod.run_api_check(force_refresh=getattr(args, "force_refresh_docs", False))
+    critical = [i for i in issues if i["severity"] == _cod.CRITICAL]
+    if critical:
+        print("[DOC-CHECK] CRITICAL issue(s) detected:", file=sys.stderr)
+        for i in critical:
+            print(f"  [CRITICAL] ({i['section']}) {i['message']}", file=sys.stderr)
+    elif issues:
+        print(f"[DOC-CHECK] {len(issues)} advisory issue(s). Run `agnes_api.py check` for details.", file=sys.stderr)
+
 
 
 def get_api_key() -> str:
@@ -260,7 +280,46 @@ def validate_video_args(args: argparse.Namespace) -> None:
             raise SystemExit(f"Invalid --{name.replace('_', '-')}: must be a positive integer.")
 
 
+def _check_docs_if_requested(args: argparse.Namespace) -> None:
+    """Non-blocking advisory check. Called when a command includes --check-docs."""
+    if not getattr(args, "check_docs", False):
+        return
+    issues = _cod.run_api_check(force_refresh=getattr(args, "force_refresh_docs", False))
+    critical = [i for i in issues if i["severity"] == _cod.CRITICAL]
+    if critical:
+        print("[DOC-CHECK] CRITICAL issue(s) detected:", file=sys.stderr)
+        for i in critical:
+            print(f"  [CRITICAL] ({i['section']}) {i['message']}", file=sys.stderr)
+    elif issues:
+        print(f"[DOC-CHECK] {len(issues)} advisory issue(s). Run `agnes_api.py check` for details.", file=sys.stderr)
+
+
+def cmd_check(args: argparse.Namespace) -> None:
+    """Run the official-doc sync check."""
+    issues = _cod.run_api_check(force_refresh=args.force_refresh)
+    if args.format == "json":
+        print(
+            json.dumps(
+                {
+                    "issues": issues,
+                    "counts": {
+                        "critical": sum(1 for i in issues if i["severity"] == _cod.CRITICAL),
+                        "warning": sum(1 for i in issues if i["severity"] == _cod.WARNING),
+                        "info": sum(1 for i in issues if i["severity"] == _cod.INFO),
+                    },
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        print(_cod.format_text(issues))
+    if _cod.has_blocking_issue(issues, args.fail_on):
+        raise SystemExit(1)
+
+
 def cmd_text(args: argparse.Namespace) -> None:
+    _check_docs_if_requested(args)
     messages = []
     if args.system:
         messages.append({"role": "system", "content": args.system})
@@ -293,6 +352,7 @@ def cmd_text(args: argparse.Namespace) -> None:
 
 
 def cmd_image(args: argparse.Namespace) -> None:
+    _check_docs_if_requested(args)
     validate_size(args.size)
     prompt, translated_prompt = prepare_generation_prompt(args.prompt, not args.no_translate_prompt)
     payload: dict[str, Any] = {
@@ -369,6 +429,7 @@ def poll_video(identifier: str, timeout: int, interval: int) -> dict[str, Any]:
 
 
 def cmd_video(args: argparse.Namespace) -> None:
+    _check_docs_if_requested(args)
     created = request_json("POST", "/v1/videos", video_payload(args))
     if not args.poll:
         identifier, id_kind = video_lookup_id(created)
@@ -407,6 +468,7 @@ def cmd_video(args: argparse.Namespace) -> None:
 
 
 def cmd_video_get(args: argparse.Namespace) -> None:
+    _check_docs_if_requested(args)
     data = retrieve_video(args.identifier, None if args.no_model_name else args.model_name)
     urls = extract_video_urls(data)
     output_result(
@@ -483,6 +545,7 @@ VIDEO_CASES = ("text-to-video", "image-to-video", "multi-image", "keyframes")
 
 
 def cmd_smoke_test(args: argparse.Namespace) -> None:
+    _check_docs_if_requested(args)
     validate_size(args.image_size, "image-size")
     validate_video_args(
         argparse.Namespace(
@@ -648,6 +711,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Call Agnes AI generation APIs.")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    check = sub.add_parser("check", help="Run official-doc /v1/models sync check.")
+    check.add_argument("--force-refresh", action="store_true", help="Ignore doc cache and re-fetch.")
+    check.add_argument("--format", choices=("text", "json"), default="text")
+    check.add_argument("--fail-on", choices=("critical", "warning"), default="warning")
+    check.set_defaults(func=cmd_check)
+
     text = sub.add_parser("text", help="Create a chat completion.")
     text.add_argument("--prompt", required=True)
     text.add_argument("--system")
@@ -658,6 +727,8 @@ def build_parser() -> argparse.ArgumentParser:
     text.add_argument("--tools-json", help="JSON array for OpenAI-compatible tool definitions.")
     text.add_argument("--tool-choice-json", help="JSON object/string for OpenAI-compatible tool_choice.")
     text.add_argument("--raw", action="store_true", help="Print the raw provider response.")
+    text.add_argument("--check-docs", action="store_true", help="Run non-blocking official-doc check before request.")
+    text.add_argument("--force-refresh-docs", action="store_true", help="Force refresh doc cache for --check-docs.")
     text.set_defaults(func=cmd_text)
 
     image = sub.add_parser("image", help="Generate or edit an image.")
@@ -670,6 +741,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not translate non-English prompts before sending to the image API.",
     )
     image.add_argument("--raw", action="store_true", help="Print the raw provider response.")
+    image.add_argument("--check-docs", action="store_true", help="Run non-blocking official-doc check before request.")
+    image.add_argument("--force-refresh-docs", action="store_true", help="Force refresh doc cache for --check-docs.")
     image.set_defaults(func=cmd_image)
 
     video = sub.add_parser("video", help="Create a video task.")
@@ -692,6 +765,8 @@ def build_parser() -> argparse.ArgumentParser:
     video.add_argument("--timeout", type=int, default=900)
     video.add_argument("--interval", type=int, default=10)
     video.add_argument("--raw", action="store_true", help="Print the raw provider response.")
+    video.add_argument("--check-docs", action="store_true", help="Run non-blocking official-doc check before request.")
+    video.add_argument("--force-refresh-docs", action="store_true", help="Force refresh doc cache for --check-docs.")
     video.set_defaults(func=cmd_video)
 
     video_get = sub.add_parser("video-get", help="Retrieve a video result by video_id, or by legacy task_id.")
@@ -699,6 +774,8 @@ def build_parser() -> argparse.ArgumentParser:
     video_get.add_argument("--model-name", default=VIDEO_MODEL, help="Model name for video_id result lookup.")
     video_get.add_argument("--no-model-name", action="store_true", help="Do not pass model_name for video_id lookup.")
     video_get.add_argument("--raw", action="store_true", help="Print the raw provider response.")
+    video_get.add_argument("--check-docs", action="store_true", help="Run non-blocking official-doc check before request.")
+    video_get.add_argument("--force-refresh-docs", action="store_true", help="Force refresh doc cache for --check-docs.")
     video_get.set_defaults(func=cmd_video_get)
 
     smoke = sub.add_parser("smoke-test", help="Run live text, image, and video API tests.")
@@ -718,6 +795,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=VIDEO_CASES,
         help="Video case to test. Repeat to test multiple cases. Omit to skip video creation.",
     )
+    smoke.add_argument("--check-docs", action="store_true", help="Run non-blocking official-doc check before request.")
+    smoke.add_argument("--force-refresh-docs", action="store_true", help="Force refresh doc cache for --check-docs.")
     smoke.set_defaults(func=cmd_smoke_test)
 
     return parser

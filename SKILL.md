@@ -1,5 +1,6 @@
 ---
 name: agnes-ai-generation
+version: 1.1.0
 description: Call Agnes AI / Sapiens AI generation APIs for text, image, and video. Use when the user asks to use Agnes models, Agnes Image, Agnes Video, Agnes 2.0 Flash, apihub.agnes-ai.com, or to generate text, images, edit images, create videos, animate images, create keyframe videos, or test Agnes API calls.
 ---
 
@@ -12,7 +13,8 @@ Use this skill to call Agnes text, image, and video generation APIs through `htt
 1. Read `references/api.md` when endpoint details, parameters, or response fields are needed.
 2. Use `scripts/agnes_api.py` for real API calls instead of rewriting curl by hand.
 3. Require an API key in `AGNES_API_KEY`, `AGNES_API_TOKEN`, or `APIHUB_AGNES_API_KEY`. Never print the key.
-4. For light live verification, run `smoke-test`; it avoids video creation by default. Add `--include-image-edit` for image-to-image, and add `--video-case <case>` explicitly for video modes. Treat the skill as fully tested only when basic text, text streaming, text tool calling, text-to-image, image-to-image, text-to-video, image-to-video, multi-image video, keyframe video, and video retrieval return successful responses.
+4. Run `python scripts/agnes_api.py check` to verify local model rules against the official `/v1/models` endpoint.
+5. For light live verification, run `smoke-test`; it avoids video creation by default. Add `--include-image-edit` for image-to-image, and add `--video-case <case>` explicitly for video modes. Treat the skill as fully tested only when basic text, text streaming, text tool calling, text-to-image, image-to-image, text-to-video, image-to-video, multi-image video, keyframe video, and video retrieval return successful responses.
 
 ## Commands
 
@@ -66,6 +68,26 @@ Retrieve a video task:
 python scripts/agnes_api.py video-get video_123456
 ```
 
+Run the official-doc sync check:
+
+```bash
+python scripts/agnes_api.py check
+```
+
+Force refresh the cache:
+
+```bash
+python scripts/agnes_api.py check --force-refresh
+```
+
+Attach a non-blocking check to any generation command:
+
+```bash
+python scripts/agnes_api.py text --prompt "hi" --check-docs
+python scripts/agnes_api.py image --prompt "hello" --check-docs
+python scripts/agnes_api.py video --prompt "test" --check-docs
+```
+
 Light live smoke test:
 
 ```bash
@@ -96,6 +118,17 @@ python scripts/agnes_api.py smoke-test --video-case text-to-video
 - The video command defaults to `num_frames=121` and `frame_rate=24` for more stable generation. Video smoke tests default to `num_frames=81` and `frame_rate=24`.
 - Warn the user before costly or long-running live video generation unless they explicitly asked to test or generate video.
 - Test video capabilities one at a time with `smoke-test --video-case <case>` to avoid creating many tasks at once. Supported cases are `text-to-video`, `image-to-video`, `multi-image`, and `keyframes`.
+
+## Self-Update Guard
+
+This skill checks itself against the official Agnes API state. The check uses two layers:
+
+- **API layer**: `GET /v1/models` on `https://apihub.agnes-ai.com` verifies that the models used by this skill are still available. Catches deprecated or renamed models (CRITICAL).
+- **Doc layer**: fetches the public doc pages (`https://agnes-ai.com/doc` and `https://agnes-ai.com/zh-Hans/docs`) as a secondary signal. If the doc structure changes, the skill reports INFO-level issues.
+
+The check is non-blocking by default. `agnes_api.py check` exits with a non-zero code only when CRITICAL issues are found (or with `--fail-on warning`). `--check-docs` on any generation command runs the check in advisory mode and prints warnings to stderr without stopping execution.
+
+Agnes does not currently provide a `llms.txt` index, so the `/v1/models` endpoint is the authoritative source. A local snapshot is kept in `templates/known_rules.json` and can be updated when the official model list changes.
 
 ## Current Validation Notes
 
