@@ -19,6 +19,17 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_official_docs as _cod  # noqa: E402
 
+# ── .env fallback: load skill-local .env so the key survives PC switches ──
+# shell-exported vars still win (override=False); dotenv missing → silent skip.
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _skill_root = Path(__file__).resolve().parent.parent
+    _env_path = _skill_root / ".env"
+    if _env_path.is_file():
+        _load_dotenv(_env_path, override=False)
+except ImportError:
+    pass
+
 
 BASE_URL = "https://apihub.agnes-ai.com"
 TEXT_MODEL = "agnes-2.0-flash"
