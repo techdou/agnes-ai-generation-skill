@@ -133,7 +133,7 @@ Add `--raw` to print only the original Agnes response.
 
 ## Self-Update Guard
 
-Agnes does not provide a public `llms.txt` index, so this skill uses the OpenAI-compatible **`GET /v1/models`** endpoint as the authoritative source and fetches public doc pages as a secondary signal.
+Agnes publishes a [`llms.txt` doc index](https://wiki.agnes-ai.com/llms.txt) on `wiki.agnes-ai.com` (all pages as markdown, incl. [pricing](https://wiki.agnes-ai.com/en/docs/pricing.md)). This skill uses the OpenAI-compatible **`GET /v1/models`** endpoint as the authoritative source and fetches per-model doc pages (`wiki.agnes-ai.com/en/docs/<model-id-without-dots>.md`) as a secondary signal.
 
 ```powershell
 # Standalone check

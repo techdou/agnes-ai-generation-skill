@@ -1,3 +1,15 @@
+# ============================================================
+# agnes-ai-generation-skill — .gitignore
+#
+# 原则:
+#   1. 敏感信息绝对不入库(API Key / 凭证 / 密钥)
+#   2. 运行产物与缓存不入库(output/ / __pycache__ / 文档缓存)
+#   3. 开发工具个人配置不入库(.zcode/ .vscode/ .claude/ 等)
+#   4. skill 功能本体必须入库:SKILL.md / references/ / templates/ /
+#      agents/openai.yaml(客户端接口元数据)不在此排除
+# ============================================================
+
+# ---------- 敏感信息(绝对不入库) ----------
 .env
 .env.*
 *.key
@@ -5,8 +17,8 @@
 *credentials*
 *secret*
 
+# ---------- 运行产物 / 缓存 ----------
 output/
-
 __pycache__/
 *.py[cod]
 *$py.class
@@ -16,19 +28,31 @@ dist/
 build/
 .eggs/
 
+# ---------- Python 虚拟环境 ----------
 venv/
 .venv/
 env/
 ENV/
 
+# ---------- IDE / AI 编码助手个人配置 ----------
 .vscode/
 .idea/
+.zcode/
+.claude/
+.cursor/
+.continue/
+.codeium/
+.windsurf/
+.trae/
+.qoder/
+.aider*
 *.swp
 *.swo
 *~
 .DS_Store
 Thumbs.db
 
+# ---------- 日志 / 测试产物 ----------
 *.log
 *.tmp
 *.jsonl
@@ -36,9 +60,6 @@ Thumbs.db
 .pytest_cache/
 htmlcov/
 .coverage
-
-agents/
-.aider-desk/
 
 desktop.ini
 ehthumbs.db

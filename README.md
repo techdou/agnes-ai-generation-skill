@@ -140,7 +140,7 @@ python scripts/agnes_api.py text --prompt "hi" --raw
 
 ## 官方文档同步校验（Self-Update Guard）
 
-Agnes 官方文档没有提供 `llms.txt` 索引，因此本 skill 使用 OpenAI 兼容的 **`GET /v1/models`** 作为权威校验源，并抓取公开文档页作为辅助信号。
+Agnes 官方文档在 `wiki.agnes-ai.com` 提供 [`llms.txt` 索引](https://wiki.agnes-ai.com/llms.txt)(全量 markdown 页面,含[定价页](https://wiki.agnes-ai.com/en/docs/pricing.md)),本 skill 使用 OpenAI 兼容的 **`GET /v1/models`** 作为权威校验源,并抓取 per-model 文档页(`wiki.agnes-ai.com/en/docs/<模型ID去点>.md`)作为辅助信号。
 
 ```powershell
 # 独立运行校验
