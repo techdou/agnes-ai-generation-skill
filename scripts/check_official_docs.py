@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Check Agnes AI local rules against the official /v1/models endpoint.
 
-Agnes AI does not currently expose a public llms.txt index, so this checker
-uses the OpenAI-compatible /v1/models endpoint as the authoritative source,
-and fetches per-model doc pages (slug = model_id without dots) under
-https://agnes-ai.com/doc and https://agnes-ai.com/zh-Hans/docs as a
-secondary signal: each known model should have a live doc page that
-mentions its own model ID.
+The authoritative source is the OpenAI-compatible /v1/models endpoint. The
+official docs live on the Mintlify wiki (wiki.agnes-ai.com) with a public
+llms.txt index; per-model doc pages (slug = model_id without dots, plus a
+.md suffix) under the en/ and zh-Hans/ doc bases are used as a secondary
+signal: each known model should have a live doc page that mentions its own
+model ID.
 
 Exit codes: 0=no issues, 1=WARNING/CRITICAL, 2=couldn't complete.
 """
@@ -26,8 +26,8 @@ from typing import Any, Dict, List, Optional, Tuple
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_KNOWN_RULES = SKILL_ROOT / "templates" / "known_rules.json"
 DEFAULT_BASE_URL = "https://apihub.agnes-ai.com"
-DEFAULT_DOC_BASE_EN = "https://agnes-ai.com/doc"
-DEFAULT_DOC_BASE_ZH = "https://agnes-ai.com/zh-Hans/docs"
+DEFAULT_DOC_BASE_EN = "https://wiki.agnes-ai.com/en/docs"
+DEFAULT_DOC_BASE_ZH = "https://wiki.agnes-ai.com/zh-Hans/docs"
 
 CRITICAL = "CRITICAL"
 WARNING = "WARNING"
@@ -133,12 +133,12 @@ def check_models(known_rules: Dict[str, Any], api_key: str, base_url: str) -> Tu
 
 
 def _model_doc_slug(model_id: str) -> str:
-    """Agnes per-model doc URLs drop dots from the model ID.
+    """Agnes per-model doc URLs drop dots from the model ID (.md suffix appended by caller).
 
-    Examples:
-      agnes-2.0-flash        -> agnes-20-flash
-      agnes-image-2.1-flash  -> agnes-image-21-flash
-      agnes-video-v2.0       -> agnes-video-v20
+    Examples (against https://wiki.agnes-ai.com/en/docs):
+      agnes-3.0-flash         -> agnes-30-flash.md
+      agnes-image-2.5-flash   -> agnes-image-25-flash.md
+      agnes-video-v2.0        -> agnes-video-v20.md
     """
     return model_id.replace(".", "")
 
@@ -152,7 +152,9 @@ def _check_model_doc_page(
 ) -> Optional[Dict[str, str]]:
     """Fetch one per-model doc page; return an issue dict if something is off."""
     slug = _model_doc_slug(model_id)
-    url = f"{base_url.rstrip('/')}/{slug}"
+    # New wiki (Mintlify) serves clean markdown at <base>/<slug>.md; the bare
+    # HTML path also exists but the .md form is the stable direct link.
+    url = f"{base_url.rstrip('/')}/{slug}.md"
     text = cache.get(url, 24.0) if not force_refresh else None
     if text is None:
         try:

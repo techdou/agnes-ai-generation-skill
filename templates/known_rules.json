@@ -1,22 +1,50 @@
 {
-  "_doc": "Local snapshot of Agnes AI official model availability. Used by check_official_docs.py as the diff baseline. The /v1/models endpoint is authoritative; per-model doc pages under doc_base_* are a secondary signal (slug = model_id without dots). Update this when official docs change.",
+  "_doc": "Local snapshot of Agnes AI official model availability. Used by check_official_docs.py as the diff baseline. The /v1/models endpoint is authoritative; per-model doc pages under doc_base_* are a secondary signal (slug = model_id without dots, .md suffix). The full doc index is at llms_txt. Update this when official docs change.",
   "models": [
     "agnes-2.0-flash",
-    "agnes-1.5-flash",
-    "agnes-image-2.1-flash",
+    "agnes-2.5-flash",
+    "agnes-2.5-pro",
+    "agnes-2.5-pro-alpha",
+    "agnes-2.5-pro-beta",
+    "agnes-3.0-flash",
     "agnes-image-2.0-flash",
-    "agnes-video-v2.0"
+    "agnes-image-2.1-flash",
+    "agnes-image-2.5-flash",
+    "agnes-video-v2.0",
+    "agnes-video-2.5",
+    "agnes-video-2.5-flash"
   ],
   "primary_models": {
-    "text": "agnes-2.0-flash",
-    "image": "agnes-image-2.1-flash",
+    "text": "agnes-3.0-flash",
+    "image": "agnes-image-2.5-flash",
     "video": "agnes-video-v2.0"
+  },
+  "free_tier": {
+    "_doc": "Verified 2026-09-21 against official pricing page. 'limited' means promotional free period, may end without notice.",
+    "free": [
+      "agnes-2.5-flash",
+      "agnes-3.0-flash",
+      "agnes-image-2.0-flash",
+      "agnes-image-2.1-flash",
+      "agnes-image-2.5-flash",
+      "agnes-video-v2.0"
+    ],
+    "free_limited_time": ["agnes-video-2.5-flash"],
+    "paid": [
+      "agnes-2.5-pro",
+      "agnes-2.5-pro-alpha",
+      "agnes-2.5-pro-beta",
+      "agnes-video-2.5"
+    ],
+    "notes": "agnes-2.0-flash still served (not on the current promo list, live-tested working). agnes-video-2.5 bills per second (720P $0.025/s). Video 2.5/2.5-flash use a NEW parameter schema (mode required: text/keyframe/reference; seconds '4'-'12'; size 720P/1080P/1K/2K; aspect_ratio; first_frame/last_frame/images; width/height/fps/num_frames forbidden) — incompatible with the v2.0 schema this skill sends."
   },
   "source_urls": {
     "models_api": "https://apihub.agnes-ai.com/v1/models",
-    "doc_base_en": "https://agnes-ai.com/doc",
-    "doc_base_zh": "https://agnes-ai.com/zh-Hans/docs"
+    "llms_txt": "https://wiki.agnes-ai.com/llms.txt",
+    "doc_base_en": "https://wiki.agnes-ai.com/en/docs",
+    "doc_base_zh": "https://wiki.agnes-ai.com/zh-Hans/docs",
+    "pricing": "https://wiki.agnes-ai.com/en/docs/pricing.md"
   },
-  "_slug_rule": "Per-model doc URL = doc_base_<lang> + '/' + model_id.replace('.', ''). e.g. agnes-image-2.1-flash -> agnes-image-21-flash",
-  "snapshot_date": "2026-07-15"
+  "_slug_rule": "Per-model doc URL = doc_base_<lang> + '/' + model_id.replace('.', '') + '.md'. e.g. agnes-image-2.5-flash -> https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash.md. Exception: agnes-2.0-flash has no doc page on the new wiki (older model, superseded by 2.5-flash); doc check reports WARNING for it, which is expected.",
+  "snapshot_date": "2026-09-21"
 }

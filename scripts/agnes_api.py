@@ -32,8 +32,11 @@ except ImportError:
 
 
 BASE_URL = "https://apihub.agnes-ai.com"
-TEXT_MODEL = "agnes-2.0-flash"
-IMAGE_MODEL = "agnes-image-2.1-flash"
+# 2026-09-21 sync: text/image bumped to the free next-gen models (live-tested);
+# video stays on v2.0 — the 2.5 series uses an incompatible parameter schema
+# (mode/seconds/size; num_frames/width/height forbidden) this script does not send.
+TEXT_MODEL = "agnes-3.0-flash"
+IMAGE_MODEL = "agnes-image-2.5-flash"
 VIDEO_MODEL = "agnes-video-v2.0"
 SIZE_RE = re.compile(r"^[1-9]\d*x[1-9]\d*$")
 
