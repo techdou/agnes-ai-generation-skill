@@ -8,11 +8,11 @@ Official platform: [https://platform.agnes-ai.com/](https://platform.agnes-ai.co
 
 ## Features
 
-- Text generation with `agnes-2.0-flash`
+- Text generation with `agnes-3.0-flash`
 - Streaming text responses
 - OpenAI-compatible tool-calling request shape
-- Text-to-image with `agnes-image-2.1-flash`
-- Image-to-image editing with `agnes-image-2.1-flash`
+- Text-to-image with `agnes-image-2.5-flash`
+- Image-to-image editing with `agnes-image-2.5-flash`
 - High-information-density image generation
 - Text-to-video with `agnes-video-v2.0`
 - Image-to-video with `agnes-video-v2.0`

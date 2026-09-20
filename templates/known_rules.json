@@ -45,6 +45,6 @@
     "doc_base_zh": "https://wiki.agnes-ai.com/zh-Hans/docs",
     "pricing": "https://wiki.agnes-ai.com/en/docs/pricing.md"
   },
-  "_slug_rule": "Per-model doc URL = doc_base_<lang> + '/' + model_id.replace('.', '') + '.md'. e.g. agnes-image-2.5-flash -> https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash.md. Exception: agnes-2.0-flash has no doc page on the new wiki (older model, superseded by 2.5-flash); doc check reports WARNING for it, which is expected.",
+  "_slug_rule": "Per-model doc URL = doc_base_<lang> + '/' + model_id.replace('.', '') + '.md'. e.g. agnes-image-2.5-flash -> https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash.md. Note: agnes-2.0-flash is not listed in llms.txt but its slug page agnes-20-flash.md exists as an official Deprecated historical page (verified 2026-09-21).",
   "snapshot_date": "2026-09-21"
 }

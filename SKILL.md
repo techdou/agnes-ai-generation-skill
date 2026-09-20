@@ -125,7 +125,7 @@ python scripts/agnes_api.py smoke-test --video-case text-to-video
 This skill checks itself against the official Agnes API state. The check uses two layers:
 
 - **API layer**: `GET /v1/models` on `https://apihub.agnes-ai.com` verifies that the models used by this skill are still available. Catches deprecated or renamed models (CRITICAL).
-- **Doc layer**: fetches the per-model markdown doc pages under `https://wiki.agnes-ai.com/en/docs` and `https://wiki.agnes-ai.com/zh-Hans/docs` (slug = model ID without dots, `.md` suffix) as a secondary signal. If a doc page 404s or stops mentioning its model ID, the skill reports WARNING/INFO issues. Expected: `agnes-2.0-flash` has no doc page on the current wiki (superseded by 2.5-flash).
+- **Doc layer**: fetches the per-model markdown doc pages under `https://wiki.agnes-ai.com/en/docs` and `https://wiki.agnes-ai.com/zh-Hans/docs` (slug = model ID without dots, `.md` suffix) as a secondary signal. If a doc page 404s or stops mentioning its model ID, the skill reports WARNING/INFO issues. `agnes-2.0-flash` is not listed in `llms.txt` but its slug page `agnes-20-flash.md` exists as an official Deprecated historical page.
 
 The official docs now expose a full `llms.txt` index at `https://wiki.agnes-ai.com/llms.txt` (all pages as markdown, pricing at `/en/docs/pricing.md`) — consult it first when investigating upstream changes. `/v1/models` remains the authoritative model source. A local snapshot is kept in `templates/known_rules.json` and can be updated when the official model list changes.
 

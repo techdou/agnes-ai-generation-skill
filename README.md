@@ -8,11 +8,11 @@
 
 ## 功能
 
-- 文本生成：`agnes-2.0-flash`
+- 文本生成：`agnes-3.0-flash`
 - 流式文本响应
 - OpenAI 兼容的工具调用请求结构
-- 文生图：`agnes-image-2.1-flash`
-- 图生图 / 图片编辑：`agnes-image-2.1-flash`
+- 文生图：`agnes-image-2.5-flash`
+- 图生图 / 图片编辑：`agnes-image-2.5-flash`
 - 高信息密度图片生成
 - 文本转视频：`agnes-video-v2.0`
 - 图像转视频：`agnes-video-v2.0`
@@ -180,7 +180,7 @@ python scripts/agnes_api.py smoke-test --video-case text-to-video
 
 ## 提示词语言策略
 
-Agnes 视频生成使用英文提示词更稳定。本 skill 默认会检测图片/视频提示词中的非英文字符，并先调用 `agnes-2.0-flash` 翻译成英文生成提示词，再调用图片或视频 API。
+Agnes 视频生成使用英文提示词更稳定。本 skill 默认会检测图片/视频提示词中的非英文字符，并先调用 `agnes-3.0-flash` 翻译成英文生成提示词，再调用图片或视频 API。
 
 如需跳过自动翻译：
 
