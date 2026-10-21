@@ -1,42 +1,38 @@
 {
   "_doc": "Local snapshot of Agnes AI official model availability. Used by check_official_docs.py as the diff baseline. The /v1/models endpoint is authoritative; per-model doc pages under doc_base_* are a secondary signal (slug = model_id without dots, .md suffix). The full doc index is at llms_txt. Update this when official docs change.",
   "models": [
-    "agnes-2.0-flash",
     "agnes-2.5-flash",
-    "agnes-2.5-pro",
     "agnes-2.5-pro-alpha",
     "agnes-2.5-pro-beta",
     "agnes-3.0-flash",
     "agnes-image-2.0-flash",
     "agnes-image-2.1-flash",
     "agnes-image-2.5-flash",
-    "agnes-video-v2.0",
     "agnes-video-2.5",
     "agnes-video-2.5-flash"
   ],
   "primary_models": {
     "text": "agnes-3.0-flash",
     "image": "agnes-image-2.5-flash",
-    "video": "agnes-video-v2.0"
+    "video": "agnes-video-2.5-flash"
   },
   "free_tier": {
-    "_doc": "Verified 2026-09-21 against official pricing page. 'limited' means promotional free period, may end without notice.",
+    "_doc": "Verified 2026-10-21 against official pricing page. 'limited' means promotional free period, may end without notice.",
     "free": [
       "agnes-2.5-flash",
       "agnes-3.0-flash",
       "agnes-image-2.0-flash",
       "agnes-image-2.1-flash",
-      "agnes-image-2.5-flash",
-      "agnes-video-v2.0"
+      "agnes-image-2.5-flash"
     ],
     "free_limited_time": ["agnes-video-2.5-flash"],
     "paid": [
-      "agnes-2.5-pro",
       "agnes-2.5-pro-alpha",
       "agnes-2.5-pro-beta",
+      "agnes-3.0-pro",
       "agnes-video-2.5"
     ],
-    "notes": "agnes-2.0-flash still served (not on the current promo list, live-tested working). agnes-video-2.5 bills per second (720P $0.025/s). Video 2.5/2.5-flash use a NEW parameter schema (mode required: text/keyframe/reference; seconds '4'-'12'; size 720P/1080P/1K/2K; aspect_ratio; first_frame/last_frame/images; width/height/fps/num_frames forbidden) — incompatible with the v2.0 schema this skill sends."
+    "notes": "2026-10-21 removals from /v1/models: agnes-2.0-flash, agnes-2.5-pro (pricing page still lists it; alpha/beta appear to be the replacements), agnes-video-v2.0. agnes-3.0-pro (paid) flickered in /v1/models on 2026-10-21 then disappeared the same day; pricing page marks it 'Coming soon' — expect it back, add it to models when it lands. agnes-video-2.5 bills per output second (720P $0.025/s, 1080P/1K $0.040/s, 2K $0.055/s). Video 2.5/2.5-flash schema: mode required (text/keyframe/reference); seconds '4'-'12' string; size 720P/1080P/1K/2K (flash 720P only); aspect_ratio; first_frame/last_frame (keyframe); images (reference, flash <=5 paid <=8); width/height/fps/num_frames forbidden."
   },
   "source_urls": {
     "models_api": "https://apihub.agnes-ai.com/v1/models",
@@ -45,6 +41,6 @@
     "doc_base_zh": "https://wiki.agnes-ai.com/zh-Hans/docs",
     "pricing": "https://wiki.agnes-ai.com/en/docs/pricing.md"
   },
-  "_slug_rule": "Per-model doc URL = doc_base_<lang> + '/' + model_id.replace('.', '') + '.md'. e.g. agnes-image-2.5-flash -> https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash.md. Note: agnes-2.0-flash is not listed in llms.txt but its slug page agnes-20-flash.md exists as an official Deprecated historical page (verified 2026-09-21).",
-  "snapshot_date": "2026-09-21"
+  "_slug_rule": "Per-model doc URL = doc_base_<lang> + '/' + model_id.replace('.', '') + '.md'. e.g. agnes-image-2.5-flash -> https://wiki.agnes-ai.com/en/docs/agnes-image-25-flash.md. Removed models keep historical slug pages (e.g. agnes-20-flash.md is an official Deprecated page, verified 2026-09-21); the model list above is the /v1/models source of truth.",
+  "snapshot_date": "2026-10-21"
 }

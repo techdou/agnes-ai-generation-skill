@@ -32,12 +32,17 @@ except ImportError:
 
 
 BASE_URL = "https://apihub.agnes-ai.com"
-# 2026-09-21 sync: text/image bumped to the free next-gen models (live-tested);
-# video stays on v2.0 — the 2.5 series uses an incompatible parameter schema
-# (mode/seconds/size; num_frames/width/height forbidden) this script does not send.
+# 2026-10-21 sync: video moved to the 2.5 series — agnes-video-v2.0, agnes-2.0-flash
+# and agnes-2.5-pro were removed from /v1/models. Video 2.5 uses its own parameter
+# schema (mode/seconds/size; num_frames/width/height/fps forbidden). Default video
+# model is the limited-time-free 2.5-flash; paid 2.5 bills per output second.
 TEXT_MODEL = "agnes-3.0-flash"
 IMAGE_MODEL = "agnes-image-2.5-flash"
-VIDEO_MODEL = "agnes-video-v2.0"
+VIDEO_MODEL = "agnes-video-2.5-flash"
+VIDEO_PAID_MODEL = "agnes-video-2.5"
+VIDEO_SIZES = ("720P", "1080P", "1K", "2K")
+VIDEO_ASPECT_RATIOS = ("21:9", "16:9", "4:3", "1:1", "3:4", "9:16")
+VIDEO_SECONDS = tuple(str(n) for n in range(4, 13))  # "4"-"12", string-typed
 SIZE_RE = re.compile(r"^[1-9]\d*x[1-9]\d*$")
 
 
@@ -250,6 +255,12 @@ def extract_video_urls(data: dict[str, Any]) -> list[str]:
         value = data.get(key)
         if isinstance(value, str) and value.startswith(("http://", "https://")):
             urls.append(value)
+    # Video 2.5 series puts the completed URL in metadata.url.
+    metadata = data.get("metadata")
+    if isinstance(metadata, dict):
+        value = metadata.get("url")
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            urls.append(value)
     if isinstance(data.get("data"), list):
         for item in data["data"]:
             if isinstance(item, dict):
@@ -282,30 +293,41 @@ def validate_size(value: str | None, name: str = "size") -> None:
         raise SystemExit(f"Invalid {name}: {value}. Expected WIDTHxHEIGHT, for example 1024x768.")
 
 
-def validate_video_args(args: argparse.Namespace) -> None:
-    if args.num_frames is not None:
-        if args.num_frames > 441 or (args.num_frames - 1) % 8 != 0:
-            raise SystemExit("Invalid --num-frames: must be <= 441 and satisfy 8n + 1, for example 81 or 121.")
-    if args.frame_rate is not None and not (1 <= args.frame_rate <= 60):
-        raise SystemExit("Invalid --frame-rate: supported range is 1-60.")
-    for name in ("height", "width"):
-        value = getattr(args, name)
-        if value is not None and value <= 0:
-            raise SystemExit(f"Invalid --{name.replace('_', '-')}: must be a positive integer.")
-
-
-def _check_docs_if_requested(args: argparse.Namespace) -> None:
-    """Non-blocking advisory check. Called when a command includes --check-docs."""
-    if not getattr(args, "check_docs", False):
-        return
-    issues = _cod.run_api_check(force_refresh=getattr(args, "force_refresh_docs", False))
-    critical = [i for i in issues if i["severity"] == _cod.CRITICAL]
-    if critical:
-        print("[DOC-CHECK] CRITICAL issue(s) detected:", file=sys.stderr)
-        for i in critical:
-            print(f"  [CRITICAL] ({i['section']}) {i['message']}", file=sys.stderr)
-    elif issues:
-        print(f"[DOC-CHECK] {len(issues)} advisory issue(s). Run `agnes_api.py check` for details.", file=sys.stderr)
+def validate_video_args(
+    model: str | None,
+    seconds: str | None,
+    size: str | None,
+    aspect_ratio: str | None,
+    first_frame: str | None = None,
+    last_frame: str | None = None,
+    images: list[str] | None = None,
+    mode: str | None = None,
+) -> str:
+    """Validate the Video 2.5 parameter schema and return the resolved mode."""
+    model = model or VIDEO_MODEL
+    is_flash = "flash" in model
+    if seconds is not None and seconds not in VIDEO_SECONDS:
+        raise SystemExit(f'Invalid --seconds: {seconds!r}. Expected "4"-"12" (default "5").')
+    if size is not None and size not in VIDEO_SIZES:
+        raise SystemExit(f"Invalid --size: {size!r}. Expected one of {', '.join(VIDEO_SIZES)}.")
+    if is_flash and size not in (None, "720P"):
+        raise SystemExit(
+            f"{model} only supports size 720P; drop --size or switch to the paid {VIDEO_PAID_MODEL}."
+        )
+    if aspect_ratio is not None and aspect_ratio not in VIDEO_ASPECT_RATIOS:
+        raise SystemExit(f"Invalid --aspect-ratio: {aspect_ratio!r}. Expected one of {', '.join(VIDEO_ASPECT_RATIOS)}.")
+    mode = mode or ("keyframe" if (first_frame or last_frame) else ("reference" if images else "text"))
+    if mode == "keyframe" and not (first_frame or last_frame):
+        raise SystemExit("Keyframe mode requires --first-frame and/or --last-frame.")
+    if mode == "reference" and not images:
+        raise SystemExit("Reference mode requires at least one --image.")
+    if mode == "reference" and images:
+        limit = 5 if is_flash else 8
+        if len(images) > limit:
+            raise SystemExit(f"{model} accepts at most {limit} reference images, got {len(images)}.")
+    if mode == "text" and (first_frame or last_frame or images):
+        raise SystemExit("Text mode does not accept --image/--first-frame/--last-frame; use keyframe or reference mode.")
+    return mode
 
 
 def cmd_check(args: argparse.Namespace) -> None:
@@ -393,35 +415,37 @@ def cmd_image(args: argparse.Namespace) -> None:
 
 
 def video_payload(args: argparse.Namespace) -> dict[str, Any]:
-    validate_video_args(args)
+    mode = validate_video_args(
+        args.model,
+        args.seconds,
+        args.size,
+        args.aspect_ratio,
+        first_frame=args.first_frame,
+        last_frame=args.last_frame,
+        images=args.image,
+        mode=args.mode,
+    )
     prompt, translated_prompt = prepare_generation_prompt(args.prompt, not args.no_translate_prompt)
     args._prompt_used = prompt
     args._translated_prompt = translated_prompt
     payload: dict[str, Any] = {
-        "model": VIDEO_MODEL,
+        "model": args.model or VIDEO_MODEL,
         "prompt": prompt,
+        "mode": mode,
+        "size": args.size,
+        "seconds": args.seconds,
     }
-    for name in (
-        "height",
-        "width",
-        "num_frames",
-        "frame_rate",
-        "num_inference_steps",
-        "seed",
-        "negative_prompt",
-    ):
-        value = getattr(args, name)
-        if value is not None:
-            payload[name] = value
-    if args.mode:
-        payload["mode"] = args.mode
-    if args.image:
-        if len(args.image) == 1 and args.mode != "keyframes":
-            payload["image"] = args.image[0]
-        else:
-            payload["extra_body"] = {"image": args.image}
-            if args.mode:
-                payload["extra_body"]["mode"] = args.mode
+    if args.aspect_ratio:
+        payload["aspect_ratio"] = args.aspect_ratio
+    if args.seed is not None:
+        payload["seed"] = args.seed
+    if mode == "keyframe":
+        if args.first_frame:
+            payload["first_frame"] = args.first_frame
+        if args.last_frame:
+            payload["last_frame"] = args.last_frame
+    elif mode == "reference":
+        payload["images"] = args.image
     return payload
 
 
@@ -561,14 +585,7 @@ VIDEO_CASES = ("text-to-video", "image-to-video", "multi-image", "keyframes")
 def cmd_smoke_test(args: argparse.Namespace) -> None:
     _check_docs_if_requested(args)
     validate_size(args.image_size, "image-size")
-    validate_video_args(
-        argparse.Namespace(
-            num_frames=args.video_num_frames,
-            frame_rate=args.video_frame_rate,
-            height=args.video_height,
-            width=args.video_width,
-        )
-    )
+    validate_video_args(None, args.video_seconds, args.video_size, None)
     text = request_json(
         "POST",
         "/v1/chat/completions",
@@ -656,21 +673,16 @@ def cmd_smoke_test(args: argparse.Namespace) -> None:
 
     video_common = {
         "model": VIDEO_MODEL,
+        "size": args.video_size,
+        "seconds": args.video_seconds,
     }
-    for key, value in (
-        ("height", args.video_height),
-        ("width", args.video_width),
-        ("num_frames", args.video_num_frames),
-        ("frame_rate", args.video_frame_rate),
-    ):
-        if value is not None:
-            video_common[key] = value
     video_results = {}
     if "text-to-video" in selected_cases:
         video_results["text_to_video"] = create_video_case(
             "video-text-to-video",
             {
                 **video_common,
+                "mode": "text",
                 "prompt": "A simple cinematic shot of a red square gently moving on a white background",
             },
             args,
@@ -680,8 +692,9 @@ def cmd_smoke_test(args: argparse.Namespace) -> None:
             "video-image-to-video",
             {
                 **video_common,
-                "prompt": "Animate the icon with subtle floating motion, stable centered composition",
-                "image": generated_image_url,
+                "mode": "reference",
+                "prompt": "<Picture 1> Animate the icon with subtle floating motion, stable centered composition",
+                "images": [generated_image_url],
             },
             args,
         )
@@ -692,8 +705,9 @@ def cmd_smoke_test(args: argparse.Namespace) -> None:
             "video-multi-image",
             {
                 **video_common,
-                "prompt": "Create a smooth transformation from the first icon to the second icon, stable centered composition",
-                "extra_body": {"image": [generated_image_url, edited_image_url]},
+                "mode": "reference",
+                "prompt": "<Picture 1> smoothly transforms into <Picture 2>, stable centered composition",
+                "images": [generated_image_url, edited_image_url],
             },
             args,
         )
@@ -704,8 +718,10 @@ def cmd_smoke_test(args: argparse.Namespace) -> None:
             "video-keyframes",
             {
                 **video_common,
+                "mode": "keyframe",
                 "prompt": "Create a smooth keyframe transition between the two icons, stable centered composition",
-                "extra_body": {"image": [generated_image_url, edited_image_url], "mode": "keyframes"},
+                "first_frame": generated_image_url,
+                "last_frame": edited_image_url,
             },
             args,
         )
@@ -759,17 +775,20 @@ def build_parser() -> argparse.ArgumentParser:
     image.add_argument("--force-refresh-docs", action="store_true", help="Force refresh doc cache for --check-docs.")
     image.set_defaults(func=cmd_image)
 
-    video = sub.add_parser("video", help="Create a video task.")
+    video = sub.add_parser("video", help="Create a video task (Video 2.5 schema).")
     video.add_argument("--prompt", required=True)
-    video.add_argument("--image", action="append", help="Input image URL. Repeat for multi-image or keyframes.")
-    video.add_argument("--mode", choices=("ti2vid", "keyframes"))
-    video.add_argument("--height", type=int)
-    video.add_argument("--width", type=int)
-    video.add_argument("--num-frames", type=int, default=121)
-    video.add_argument("--frame-rate", type=float, default=24)
-    video.add_argument("--num-inference-steps", type=int)
+    video.add_argument(
+        "--model",
+        help=f"Default {VIDEO_MODEL} (limited-time free). {VIDEO_PAID_MODEL} bills per output second.",
+    )
+    video.add_argument("--mode", choices=("text", "keyframe", "reference"), help="Default: auto (text, or keyframe/reference when frames/images are given).")
+    video.add_argument("--image", action="append", help="Reference image URL for reference mode. Repeat for multiple (flash <=5, paid <=8).")
+    video.add_argument("--first-frame", help="First frame image URL for keyframe mode.")
+    video.add_argument("--last-frame", help="Last frame image URL for keyframe mode.")
+    video.add_argument("--seconds", default="5", help='Output length, "4"-"12" (default "5").')
+    video.add_argument("--size", default="720P", choices=VIDEO_SIZES, help="Flash accepts 720P only; higher resolutions bill on the paid model.")
+    video.add_argument("--aspect-ratio", choices=VIDEO_ASPECT_RATIOS, help="Default 16:9 (flash 16:9 actually outputs 1280x704).")
     video.add_argument("--seed", type=int)
-    video.add_argument("--negative-prompt")
     video.add_argument(
         "--no-translate-prompt",
         action="store_true",
@@ -785,7 +804,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     video_get = sub.add_parser("video-get", help="Retrieve a video result by video_id, or by legacy task_id.")
     video_get.add_argument("identifier", help="Prefer video_id. Legacy task_id is still accepted.")
-    video_get.add_argument("--model-name", default=VIDEO_MODEL, help="Model name for video_id result lookup.")
+    video_get.add_argument("--model-name", default=VIDEO_MODEL, help="Model name for video_id result lookup (required for 2.5 keyframe/reference results).")
     video_get.add_argument("--no-model-name", action="store_true", help="Do not pass model_name for video_id lookup.")
     video_get.add_argument("--raw", action="store_true", help="Print the raw provider response.")
     video_get.add_argument("--check-docs", action="store_true", help="Run non-blocking official-doc check before request.")
@@ -794,10 +813,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     smoke = sub.add_parser("smoke-test", help="Run live text, image, and video API tests.")
     smoke.add_argument("--image-size", default="1024x768")
-    smoke.add_argument("--video-height", type=int)
-    smoke.add_argument("--video-width", type=int)
-    smoke.add_argument("--video-num-frames", type=int, default=81)
-    smoke.add_argument("--video-frame-rate", type=float, default=24)
+    smoke.add_argument("--video-size", default="720P", choices=VIDEO_SIZES)
+    smoke.add_argument("--video-seconds", default="5", help='Video length for video cases, "4"-"12".')
     smoke.add_argument("--include-image-edit", action="store_true", help="Also test image-to-image editing.")
     smoke.add_argument("--strict-tools", action="store_true", help="Fail if the tool-calling response has no tool_calls.")
     smoke.add_argument("--poll-video", action="store_true")
