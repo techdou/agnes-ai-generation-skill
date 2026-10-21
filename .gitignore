@@ -5,7 +5,8 @@
 #   1. 敏感信息绝对不入库(API Key / 凭证 / 密钥)
 #   2. 运行产物与缓存不入库(output/ / __pycache__ / 文档缓存)
 #   3. 开发工具个人配置不入库(.zcode/ .vscode/ .claude/ 等)
-#   4. skill 功能本体必须入库:SKILL.md / references/ / templates/ /
+#   4. 归档 / 备份 / 内部开发笔记不入库(避免开发状态泄漏)
+#   5. skill 功能本体必须入库:SKILL.md / references/ / templates/ /
 #      agents/openai.yaml(客户端接口元数据)不在此排除
 # ============================================================
 
@@ -60,6 +61,15 @@ Thumbs.db
 .pytest_cache/
 htmlcov/
 .coverage
+
+# ---------- 归档 / 备份 / 内部笔记(避免开发状态泄漏) ----------
+archive/
+存档/
+*归档*
+*.bak
+*.orig
+*.backup
+NOTES*.md
 
 desktop.ini
 ehthumbs.db
